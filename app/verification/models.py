@@ -3,11 +3,10 @@ import cv2
 import cvzone
 import joblib
 import numpy as np
-from datetime import datetime
 from converter import Converter
 from cvzone.PlotModule import LivePlot
 from cvzone.FaceMeshModule import FaceMeshDetector
-from pathlib import Path
+
 
 from django.db import models
 from django.core.files import File
@@ -19,14 +18,6 @@ from django.conf import settings
 from celery import chain, shared_task
 
 # Create your models here.
-
-
-class VideoRecording(models.Model):
-    video_file = models.FileField(upload_to='videos/', null=True, blank=True)
-    recorded_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"VideoRecording {self.id}"
 
 
 class TaskEyeBlink(models.Model):
@@ -43,14 +34,11 @@ class VerificationTask(models.Model):
         ('eye_blink', 'Eye Blink'),
         # ('lip_movement', 'Lip Movement'),
     ]
-    original_video = models.ForeignKey(
-        VideoRecording, on_delete=models.CASCADE,
-        related_name='original_video', null=True, blank=True
-    )
-    processed_video = models.ForeignKey(
-        VideoRecording, on_delete=models.CASCADE,
-        related_name='processed_video', null=True, blank=True
-    )
+    original_video = models.FileField(
+        upload_to='original_videos/', null=True, blank=True)
+    is_original_video_converted = models.BooleanField(default=False)
+    processed_video = models.FileField(
+        upload_to='processed_videos/', null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     task_type = models.CharField(max_length=20, choices=task_choices)
     status = models.CharField(max_length=20, choices=[
@@ -60,22 +48,17 @@ class VerificationTask(models.Model):
     task_id = models.PositiveIntegerField()
 
     def __str__(self):
-        return f"VerificationTask {self.id}"
-
-
-# cap = cv2.VideoCapture('Video.mp4')
+        return f"VerificationTask(id={self.id}, task_type='{self.task_type}', user='{self.user.username}', status='{self.status}'"
 
 
 @shared_task
 def detect_eye_blink(id):
     verificationTask = VerificationTask.objects.get(id=id)
     videoRecording = verificationTask.original_video
-    videoPath = videoRecording.video_file.path
+    videoPath = videoRecording.path
 
     LOGIC_REGRESSION_PATH = os.path.join(
         settings.BASE_DIR, 'ml_model', 'logic_regression.joblib')
-    print(f"{LOGIC_REGRESSION_PATH=}")
-    print(f"{os.path.exists(LOGIC_REGRESSION_PATH)=}")
     clf = joblib.load(LOGIC_REGRESSION_PATH)
     detector = FaceMeshDetector(maxFaces=1)
     plotY = LivePlot(640, 360, [-.5, 1.5], invert=True)
@@ -184,17 +167,18 @@ def detect_eye_blink(id):
     print(f"{framecnt=}, {blinkCounter=}")
 
     # Create a new VideoRecording object
-    processed_video_recording = VideoRecording()
-    processed_video_key = os.path.join(
-        'eye_blink_processed', os.path.basename(output_video_path))
+    processed_video_recording = verificationTask.processed_video
+    processed_video_key = os.path.basename(output_video_path)
     with open(output_video_path, 'rb') as f:
-        processed_video_recording.video_file.save(processed_video_key, File(f))
-    processed_video_recording.save()
+        processed_video_recording.save(processed_video_key, File(f), save=True)
 
     if os.path.exists(output_video_path):
-        os.remove(output_video_path)
+        os.remove(output_video_path)  # Remove the file itself
 
-    verificationTask.processed_video = processed_video_recording
+        # Optionally, remove the directory if it's empty after file removal
+        dir_path = os.path.dirname(output_video_path)
+        if os.path.isdir(dir_path) and not os.listdir(dir_path):
+            os.rmdir(dir_path)  # Remove the directory if it's empty
 
     taskEyeBlink = TaskEyeBlink.objects.get(id=verificationTask.task_id)
     taskEyeBlink.detected_count = blinkCounter
@@ -208,8 +192,8 @@ def detect_eye_blink(id):
 def video_conversion(id):
     verificationTask = VerificationTask.objects.get(id=id)
     videoRecording = verificationTask.original_video
-    input_file_key = videoRecording.video_file.name.removeprefix('videos/')
-    input_file_path = videoRecording.video_file.path
+    input_file_key = videoRecording.name.removeprefix('original_videos/')
+    input_file_path = videoRecording.path
     output_file_path = os.path.splitext(input_file_path)[0] + '_converted.mp4'
     c = Converter()
     info = c.probe(input_file_path)
@@ -226,22 +210,18 @@ def video_conversion(id):
     if os.path.exists(input_file_path):
         os.remove(input_file_path)
     with open(output_file_path, 'rb') as f:
-        videoRecording.video_file.save(input_file_key, File(f))
-    videoRecording.save()
+        verificationTask.is_original_video_converted = True
+        videoRecording.save(input_file_key, File(f), save=True)
     if os.path.exists(output_file_path):
         os.remove(output_file_path)
 
     return id
 
-    # eye_blink_count(videoRecording.video_file.path)
-
 
 @receiver(models.signals.post_save, sender=VerificationTask)
 def eye_blink_video_upload_post_processing(sender, instance, created, **kwargs):
-    if instance.original_video and (instance.processed_video is None):
-        # video_conversion.delay(instance.id)
-        task_chain = chain(video_conversion.s(instance.id) |
-                           detect_eye_blink.s())
-        task_chain.apply_async()
-    # if created:
-    #     video_conversion.delay(instance.id)
+    if instance.original_video and (not instance.is_original_video_converted):
+        if instance.task_type == 'eye_blink':
+            task_chain = chain(video_conversion.s(
+                instance.id) | detect_eye_blink.s())
+            task_chain.apply_async()
