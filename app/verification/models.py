@@ -9,6 +9,7 @@ from cvzone.FaceMeshModule import FaceMeshDetector
 
 
 from django.db import models
+from django.urls import reverse
 from django.core.files import File
 from django.dispatch import receiver
 from django.contrib.auth.models import User
@@ -199,7 +200,7 @@ def detect_eye_blink(id):
 
 
 @shared_task
-def video_conversion(id):
+def video_conversion_original_video(id):
     verificationTask = VerificationTask.objects.get(id=id)
     videoRecording = verificationTask.original_video
     input_file_key = videoRecording.name.removeprefix('original_videos/')
@@ -229,8 +230,39 @@ def video_conversion(id):
 
 
 @shared_task
+def video_conversion_processed_video(id):
+    verificationTask = VerificationTask.objects.get(id=id)
+    videoRecording = verificationTask.processed_video
+    input_file_key = videoRecording.name.removeprefix('processed_videos/')
+    input_file_path = videoRecording.path
+    output_file_path = os.path.splitext(input_file_path)[0] + '_converted.mp4'
+    c = Converter()
+    info = c.probe(input_file_path)
+    convert = c.convert(input_file_path, output_file_path, {
+        'format': 'mp4',
+        'video': {
+            'codec': 'hevc',
+            'width': info.video.video_width,
+            'height': info.video.video_height,
+            'fps': info.video.video_fps
+        }})
+    for timecode in convert:
+        pass
+    if os.path.exists(input_file_path):
+        os.remove(input_file_path)
+    with open(output_file_path, 'rb') as f:
+        videoRecording.save(input_file_key, File(f), save=True)
+    if os.path.exists(output_file_path):
+        os.remove(output_file_path)
+
+    return id
+
+
+@shared_task
 def update_profile_verification_if_passed(id):
     task = VerificationTask.objects.get(id=id)
+    verification_url = reverse(
+        'verification_task_details',  args=[task.id])
     if task.task_type == 'eye_blink':
         eye_blink_task = TaskEyeBlink.objects.get(id=task.task_id)
         if (eye_blink_task.accuracy >= settings.LIVELINESS_PASSED_PERCENTAGE):
@@ -239,15 +271,16 @@ def update_profile_verification_if_passed(id):
             profile.is_verified = True
             profile.save()
             task.save()
+
             send_notification_to_a_user.delay(task.user.username,
                                               'Verification Successful',
-                                              f'Eye Blink Verification passed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected'
+                                              f'Eye Blink Verification passed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected. <a href="{verification_url}">View details</a>'
                                               )
 
         else:
             send_notification_to_a_user.delay(task.user.username,
                                               'Verification Failed',
-                                              f'Eye Blink Verification failed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected'
+                                              f'Eye Blink Verification failed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected. <a href="{verification_url}">View details</a>'
                                               )
 
 
@@ -255,8 +288,9 @@ def update_profile_verification_if_passed(id):
 def eye_blink_video_upload_post_processing(sender, instance, created, **kwargs):
     if instance.original_video and (not instance.is_original_video_converted):
         if instance.task_type == 'eye_blink':
-            task_chain = chain(video_conversion.s(instance.id)
+            task_chain = chain(video_conversion_original_video.s(instance.id)
                                | detect_eye_blink.s()
+                               | video_conversion_processed_video.s()
                                | update_profile_verification_if_passed.s()
                                )
             task_chain.apply_async()

@@ -1,8 +1,22 @@
 from django import template
 from django.contrib.auth.models import Group
 from authentication.models import Profile
+from notification.models import UserNotification
 
 register = template.Library()
+
+
+@register.simple_tag
+def fetch_notifications(user):
+    notifications = UserNotification.objects.filter(user=user, read=False)
+    return notifications
+
+
+@register.simple_tag
+def fetch_unread_notificaton_count(user):
+    unread_notification_count = UserNotification.objects.filter(
+        user=user, read=False).count()
+    return unread_notification_count
 
 
 @register.filter(name='has_group')

@@ -22,7 +22,7 @@ def watch_processed_video(request, task_id):
         'task': task,
         'task_details': obj
     })
-    return render(request, 'verification/watch-processed-video.html', context)
+    return render(request, 'verification/task-deatails.html', context)
 
 
 @login_required

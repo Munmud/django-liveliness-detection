@@ -1,4 +1,5 @@
 {% load i18n %} {% load static %}
+{% load poll_extras %}
 
 <nav class="layout-navbar {{ container_class }} navbar navbar-expand-xl navbar-detached align-items-center bg-navbar-theme" id="layout-navbar">
   {% if not navbar_hide_toggle %}
@@ -26,6 +27,8 @@
 
       {% if user.is_authenticated %}
         <!-- Notification -->
+        {% fetch_notifications request.user as notifications %}
+        {% fetch_unread_notificaton_count request.user as unread_notification_count %}
         <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-1">
           <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
             <i class="bx bx-bell bx-sm"></i>
@@ -49,7 +52,7 @@
                     <div class="d-flex">
                       <div class="flex-grow-1">
                         <h6 class="mb-1">{{ notification.title }}</h6>
-                        <p class="mb-0">{{ notification.message }}</p>
+                        <p class="mb-0">{{ notification.message|safe }}</p>
                         <small class="text-muted">{{ notification.timestamp }}</small>
                       </div>
                       {% if not notification.read %}
@@ -149,23 +152,23 @@
     
       // Construct the inner HTML for the notification
       var innerHTML = `
-                                                                                    <div class="d-flex">
-                                                                                      <div class="flex-shrink-0 me-3">
-                                                                                        <div class="avatar">
-                                                                                          <span class="avatar-initial rounded-circle bg-label-danger">${name.substring(0, 2)}</span>
-                                                                                        </div>
-                                                                                      </div>
-                                                                                      <div class="flex-grow-1">
-                                                                                        <h6 class="mb-1">${name}</h6>
-                                                                                        <p class="mb-0">${message}</p>
-                                                                                        <small class="text-muted">${timeAgo}</small>
-                                                                                      </div>
-                                                                                      <div class="flex-shrink-0 dropdown-notifications-actions">
-                                                                                        <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                                                                                        <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="bx bx-x"></span></a>
-                                                                                      </div>
-                                                                                    </div>
-                                                                                  `
+                                                                                                        <div class="d-flex">
+                                                                                                          <div class="flex-shrink-0 me-3">
+                                                                                                            <div class="avatar">
+                                                                                                              <span class="avatar-initial rounded-circle bg-label-danger">${name.substring(0, 2)}</span>
+                                                                                                            </div>
+                                                                                                          </div>
+                                                                                                          <div class="flex-grow-1">
+                                                                                                            <h6 class="mb-1">${name}</h6>
+                                                                                                            <p class="mb-0">${message}</p>
+                                                                                                            <small class="text-muted">${timeAgo}</small>
+                                                                                                          </div>
+                                                                                                          <div class="flex-shrink-0 dropdown-notifications-actions">
+                                                                                                            <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
+                                                                                                            <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="bx bx-x"></span></a>
+                                                                                                          </div>
+                                                                                                        </div>
+                                                                                                      `
     
       // Set the inner HTML of the list item
       listItem.innerHTML = innerHTML
