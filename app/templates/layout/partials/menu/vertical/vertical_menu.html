@@ -39,6 +39,11 @@
           <li class="menu-item {% if '/update_profile/' in request.path %}{% endif %}">
             <a href="{% url 'update_profile' %}" class="menu-link"><div class="text-truncate" data-i18n="Update Profile">Update Profile</div></a>
           </li>
+          {% if not request.user|is_profile_verified %}
+            <li class="menu-item {% if '/verification/' in request.path %}{% endif %}">
+              <a href="{% url 'verify' %}" class="menu-link"><div class="text-truncate" data-i18n="Verify Yourself">Verify Yourself</div></a>
+            </li>
+          {% endif %}
         </ul>
       </li>
       <!-- / Account -->

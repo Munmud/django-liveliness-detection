@@ -1,5 +1,6 @@
 from django import template
 from django.contrib.auth.models import Group
+from authentication.models import Profile
 
 register = template.Library()
 
@@ -19,3 +20,13 @@ def calculate_duration(login_time, logout_time):
         return f"{hours} hours, {minutes} minutes"
     else:
         return "N/A"
+
+
+@register.filter
+def is_profile_verified(user):
+    print(f"{user=}")
+    try:
+        profile = Profile.objects.get(user=user)
+        return profile.is_verified
+    except Profile.DoesNotExist:
+        return False
