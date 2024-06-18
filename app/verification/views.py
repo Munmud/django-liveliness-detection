@@ -1,12 +1,28 @@
 import random
 
-from django.shortcuts import render
-from django.http import JsonResponse
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
+from django.views.static import serve
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 
 from web_project import TemplateLayout
 from verification.models import VerificationTask, TaskEyeBlink
+
+
+@login_required
+def watch_processed_video(request, task_id):
+    context = TemplateLayout.init(request, {})
+    task = get_object_or_404(VerificationTask, pk=task_id)
+    obj = None
+    if (task.task_type == 'eye_blink'):
+        obj = TaskEyeBlink.objects.get(id=task.task_id)
+    context.update({
+        'task': task,
+        'task_details': obj
+    })
+    return render(request, 'verification/watch-processed-video.html', context)
 
 
 @login_required

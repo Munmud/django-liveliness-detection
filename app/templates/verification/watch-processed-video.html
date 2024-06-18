@@ -1,0 +1,46 @@
+{% extends layout_path %}
+
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}
+  Update Profile - Forms
+{% endblock %}
+
+{% block page_js %}
+  {{ block.super }}
+  {% comment %} <script src="{% static 'js/form-basic-inputs.js' %}"></script> {% endcomment %}
+{% endblock %}
+
+{% block content %}
+  <h4 class="py-3 mb-4"><span class="text-muted fw-light">Account /</span> Verification Video</h4>
+
+  <div class="row justify-content-center">
+    <div class="card mt-3">
+      <div class="card-body">
+        <h5 class="card-title">Task ID: {{ task.task_id }}</h5>
+        <p class="card-text">Task Type: {{ task.get_task_type_display }}</p>
+
+        {% if task.task_type in 'eye_blink' %}
+          <p class="card-text">Expected Eye Blink : {{ task_details.expected_count }}</p>
+          <p class="card-text">Detected Eye Blink : {{ task_details.expected_count }}</p>
+          <p class="card-text">Accuracy : {{ task_details.accuracy }}</p>
+        {% endif %}
+
+        <p class="card-text">Status: {{ task.get_status_display }}</p>
+        <p class="card-text">User: {{ task.user.username }}</p>
+        {% if task.original_video %}
+          <p class="card-text">
+            Original Video: <a href="{{ task.original_video.url }}" target="_blank">{{ task.original_video.name }}</a>
+          </p>
+        {% endif %}
+        {% if task.processed_video %}
+          <p class="card-text">
+            Processed Video: <a href="{{ task.processed_video.url }}" target="_blank">{{ task.processed_video.name }}</a>
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

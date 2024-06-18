@@ -53,6 +53,11 @@ class VerificationTask(models.Model):
     def __str__(self):
         return f"VerificationTask(id={self.id}, task_type='{self.task_type}', user='{self.user.username}', status='{self.status}'"
 
+    def get_processed_video_url(self):
+        if self.processed_video:
+            return self.processed_video.url
+        return None
+
 
 @shared_task
 def detect_eye_blink(id):
