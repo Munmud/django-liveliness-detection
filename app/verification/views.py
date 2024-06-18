@@ -1,0 +1,76 @@
+import random
+
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+
+from web_project import TemplateLayout
+from verification.models import VideoRecording, VerificationTask, TaskEyeBlink
+
+
+@login_required
+def verify(request):
+    context = TemplateLayout.init(request, {})
+    tasks = VerificationTask.task_choices
+    chosen_task = tasks[random.randint(0, len(tasks)-1)]
+
+    if chosen_task[0] == 'eye_blink':
+        eye_blink_task = TaskEyeBlink.objects.create(
+            expected_count=random.randint(3, 7))
+        new_task = VerificationTask.objects.create(
+            user=request.user,
+            task_type=chosen_task[0],
+            task_id=eye_blink_task.id
+        )
+        context.update({
+            'task_id': new_task.id,
+            'expected_count': eye_blink_task.expected_count
+        })
+        return render(request, 'verification/eye_blink_verification.html', context)
+
+    return render(request, 'verification/eye_blink_verification.html', context)
+
+
+@login_required
+def save_eye_blink_recording(request):
+    if request.method == 'POST' and request.FILES['video_blob']:
+        video_file = request.FILES['video_blob']
+        task_id = int(request.POST.get('task_id'))
+
+        print(f"{task_id=}")
+        verificationTask = VerificationTask.objects.get(id=task_id)
+        video_recording = VideoRecording(
+            video_file=video_file
+        )
+        video_recording.save()
+        verificationTask.original_video = video_recording
+        verificationTask.save()
+        messages.success(
+            request, "Keep an eye on notification to see verification results.")
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'failed'})
+
+
+@login_required
+def video_record(request):
+    context = TemplateLayout.init(request, {})
+
+    # Update the context
+
+    return render(request, 'common/video_record.html', context)
+
+
+@login_required
+def save_recording(request):
+    print('-----------------saving recording ----------------')
+    if request.method == 'POST' and request.FILES['video_blob']:
+        video_file = request.FILES['video_blob']
+        title = request.POST.get('title', 'Untitled')
+        video_recording = VideoRecording(
+            video_file=video_file,
+            user=request.user
+        )
+        video_recording.save()
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'failed'})

@@ -1,0 +1,132 @@
+{% extends layout_path %}
+
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+
+{% block vendor_css %}
+  <script src="https://cdn.webrtc-experiment.com/RecordRTC.js"></script>
+{% endblock %}
+
+{% block title %}
+  Record Video
+{% endblock %}
+
+{% block content %}
+  <h4 class="py-3 mb-4"><span class="text-muted fw-light">Account / Verify /</span> Eye Blink Verification</h4>
+
+  <div class="row justify-content-center">
+    <!-- Accordion -->
+    <h5 class="mt-4">Instructions</h5>
+    <div class="row">
+      <div class="col-md mb-4 mb-md-0">
+        <div class="accordion mt-3" id="accordionExample">
+          <div class="card accordion-item active">
+            <h2 class="accordion-header" id="headingOne"><button type="button" class="accordion-button" data-bs-toggle="collapse" data-bs-target="#accordionOne" aria-expanded="true" aria-controls="accordionOne">Prepare Setup</button></h2>
+
+            <div id="accordionOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+              <div class="accordion-body">
+                <ul>
+                  <li>Ensure there are no people in front of the camera.</li>
+                  <li>Position yourself directly facing the camera lens.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="card accordion-item">
+            <h2 class="accordion-header" id="headingTwo"><button type="button" class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#accordionTwo" aria-expanded="false" aria-controls="accordionTwo">Start Recording</button></h2>
+            <div id="accordionTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#accordionExample">
+              <div class="accordion-body">Begin recording once you can see your reflection in the camera lens.</div>
+            </div>
+          </div>
+          <div class="card accordion-item">
+            <h2 class="accordion-header" id="headingThree"><button type="button" class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#accordionThree" aria-expanded="false" aria-controls="accordionThree">Blink Count Task</button></h2>
+            <div id="accordionThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#accordionExample">
+              <div class="accordion-body">Perform exactly {{ expected_count }} blinks while maintaining a steady gaze into the camera.</div>
+            </div>
+          </div>
+          <div class="card accordion-item">
+            <h2 class="accordion-header" id="headingFour"><button type="button" class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#accordionFour" aria-expanded="false" aria-controls="accordionFour">Blinking Protocol</button></h2>
+            <div id="accordionFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#accordionExample">
+              <div class="accordion-body">Avoid excessive blinking before initiating the blinks for the count.</div>
+            </div>
+          </div>
+          <div class="card accordion-item">
+            <h2 class="accordion-header" id="headingFive"><button type="button" class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#accordionFive" aria-expanded="false" aria-controls="accordionFive">End Recording:</button></h2>
+            <div id="accordionFive" class="accordion-collapse collapse" aria-labelledby="headingFive" data-bs-parent="#accordionExample">
+              <div class="accordion-body">Stop the recording promptly after completing the {{ expected_count }} blinks.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br />
+    <!-- / Accordion -->
+    <div class="p-3 row justify-content-center">
+      <h3>Blink exacly {{ expected_count }} times</h3>
+      <!-- Add margin-y (vertical margin) -->
+      <video id="video" width="640" height="480" controls autoplay class="mb-2"></video>
+      <button id="start" class="btn btn-primary mt-3">Start Recording</button> <!-- Add margin-top -->
+      <button id="stop" class="btn btn-danger mt-3" style="display:none;">Stop Recording</button>
+      <button id="upload" class="btn btn-success mt-3" style="display:none;">Upload Video</button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block page_js %}
+  {{ block.super }}
+  <script>
+    let video = document.getElementById('video')
+    let start = document.getElementById('start')
+    let stop = document.getElementById('stop')
+    let upload = document.getElementById('upload')
+    let recorder
+    let videoBlob
+    let mp4File
+    
+    start.addEventListener('click', async () => {
+      let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      video.srcObject = stream
+      recorder = new RecordRTC(stream, {
+        type: 'video',
+        mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'
+      })
+      recorder.startRecording()
+      start.style.display = 'none'
+      stop.style.display = 'inline'
+    })
+    
+    stop.addEventListener('click', () => {
+      recorder.stopRecording(() => {
+        videoBlob = recorder.getBlob()
+        let url = URL.createObjectURL(videoBlob)
+        video.src = url
+        upload.style.display = 'inline'
+        stop.style.display = 'none'
+      })
+    })
+    
+    upload.addEventListener('click', () => {
+      let formData = new FormData()
+      formData.append('video_blob', videoBlob, 'video.mp4')
+      formData.append('task_id', '{{ task_id }}')
+    
+      fetch("{% url 'save_eye_blink_recording' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}'
+        }
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.status === 'success') {
+            alert('Video uploaded successfully!')
+            window.location.href = "{% url 'dashboard' %}"
+          } else {
+            alert('Video upload failed.')
+          }
+        })
+    })
+  </script>
+{% endblock %}
