@@ -198,6 +198,8 @@ EMAIL_PORT = 587
 EMAIL_HOST_USER = 'moontasir042@gmail.com'  # Your email address
 EMAIL_HOST_PASSWORD = 'sutz opho plfu nbvv'  # Your email password
 
+LIVELINESS_PASSED_PERCENTAGE = 80
+
 
 # Project related Variables
 # GROUP_NAME_SYSTEM_ADMIN = 'System Admin'

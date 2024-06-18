@@ -17,6 +17,8 @@ from django.conf import settings
 
 from celery import chain, shared_task
 
+from authentication.models import Profile
+
 # Create your models here.
 
 
@@ -182,10 +184,12 @@ def detect_eye_blink(id):
 
     taskEyeBlink = TaskEyeBlink.objects.get(id=verificationTask.task_id)
     taskEyeBlink.detected_count = blinkCounter
+    taskEyeBlink.accuracy = min(taskEyeBlink.expected_count, taskEyeBlink.detected_count) / \
+        max(taskEyeBlink.expected_count, taskEyeBlink.detected_count)*100.0
     taskEyeBlink.save()
     verificationTask.save()
 
-    return blinkCounter
+    return verificationTask.id
 
 
 @shared_task
@@ -218,10 +222,25 @@ def video_conversion(id):
     return id
 
 
+@shared_task
+def update_profile_verification_if_passed(id):
+    task = VerificationTask.objects.get(id=id)
+    if task.task_type == 'eye_blink':
+        eye_blink_task = TaskEyeBlink.objects.get(id=task.task_id)
+        if (eye_blink_task.accuracy >= settings.LIVELINESS_PASSED_PERCENTAGE):
+            task.status = 'passed'
+            profile = Profile.objects.get(user=task.user)
+            profile.is_verified = True
+            profile.save()
+            task.save()
+
+
 @receiver(models.signals.post_save, sender=VerificationTask)
 def eye_blink_video_upload_post_processing(sender, instance, created, **kwargs):
     if instance.original_video and (not instance.is_original_video_converted):
         if instance.task_type == 'eye_blink':
-            task_chain = chain(video_conversion.s(
-                instance.id) | detect_eye_blink.s())
+            task_chain = chain(video_conversion.s(instance.id)
+                               | detect_eye_blink.s()
+                               | update_profile_verification_if_passed.s()
+                               )
             task_chain.apply_async()
