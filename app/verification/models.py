@@ -18,6 +18,7 @@ from django.conf import settings
 from celery import chain, shared_task
 
 from authentication.models import Profile
+from notification.tasks import send_notification_to_a_user
 
 # Create your models here.
 
@@ -233,6 +234,16 @@ def update_profile_verification_if_passed(id):
             profile.is_verified = True
             profile.save()
             task.save()
+            send_notification_to_a_user.delay(task.user.username,
+                                              'Verification Successful',
+                                              f'Eye Blink Verification passed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected'
+                                              )
+
+        else:
+            send_notification_to_a_user.delay(task.user.username,
+                                              'Verification Failed',
+                                              f'Eye Blink Verification failed with {eye_blink_task.accuracy}% accuracy; {eye_blink_task.expected_count} blinks expected, {eye_blink_task.detected_count} detected'
+                                              )
 
 
 @receiver(models.signals.post_save, sender=VerificationTask)
